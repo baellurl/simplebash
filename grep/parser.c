@@ -6,7 +6,6 @@ option parser_flags(int argc, char **argv) {
 
   int opt;
 
-
   while ((opt = getopt(argc, argv, "e:ivclnhsf:o")) != -1) {
     switch (opt) {
     case 'e':
@@ -66,6 +65,10 @@ option parser_flags(int argc, char **argv) {
     optind++;
   }
 
+  if (argc - optind == 1) {
+    flags.h = 1;
+  }
+
   return flags;
 }
 
@@ -85,8 +88,8 @@ void print_match(regex_t *_regex, char *line) {
   regmatch_t match;
   int offset = 0;
 
-      while (1) {
-        
+  while (1) {
+
     int result = regexec(_regex, line + offset, 1, &match, 0);
 
     if (result != 0) {
@@ -100,8 +103,6 @@ void print_match(regex_t *_regex, char *line) {
 
     offset += match.rm_eo;
   }
-
-
 }
 
 void add_pattern(option *flags, char *pattern) { // для двойного флага -е
@@ -171,7 +172,7 @@ void processFile(option flags, char *path, regex_t *compiled) {
   size_t _n = 0;    // размер_буффера_строки
   ssize_t read = 0; // количество символов
   int line_number = 1;
-  int str_match = 0;
+  int str_match = 0; // количество совпадающих строк
 
   read = getline(&_lineptr, &_n, _ptr_file);
 
@@ -181,28 +182,37 @@ void processFile(option flags, char *path, regex_t *compiled) {
 
     if ((result == 0 && !flags.v) || (flags.v && result != 0)) {
 
-              output_line(_lineptr,read);
-
       if (!flags.c && !flags.l) {
-        
-        
-        if (flags.n ) {
+        if (!flags.h)
+          printf("\033[0;35m%s:\033[0m", path);
+
+        if (flags.n) {
           printf("%d:", line_number);
         }
 
-        output_line(_lineptr,read);
+        if (flags.o) {
+          print_match(compiled, _lineptr);
+        } else {
+          output_line(_lineptr, read);
+        }
+      }
+      str_match++;
+    }
 
     read = getline(&_lineptr, &_n, _ptr_file);
 
-    
-      }
-    }
     line_number++;
   }
 
   free(_lineptr);
 
-  
+  if (flags.l) {
+    printf("\033[0;35m%s\033[0m\n", path);
+  }
+  if (flags.c) {
+    printf("%d\n", str_match);
+  }
+
   fclose(_ptr_file);
 }
 
@@ -213,8 +223,9 @@ void outputFile(option flags, int argc, char **argv) {
   int error = regcomp(&_pregex, flags.pattern, REG_EXTENDED | flags.i);
   if (error)
     perror("Error");
- 
+
   for (int i = optind; i < argc; i++) {
+
     processFile(flags, argv[i], &_pregex);
   }
 
